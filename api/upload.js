@@ -3,18 +3,27 @@ import fetch from "node-fetch";
 export const config = {
   api: {
     bodyParser: {
-      sizeLimit: "10mb", // maximale Dateigröße pro Request
+      sizeLimit: "10mb",
     },
   },
 };
 
 export default async function handler(req, res) {
+  // ✅ CORS erlauben
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
   try {
-    const { files } = req.body; // erwartet: [{name, type, data(base64)}]
+    const { files } = req.body;
 
     if (!files || !Array.isArray(files) || files.length === 0) {
       return res.status(400).json({ error: "No files provided" });
@@ -34,10 +43,8 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: `File type not allowed: ${type}` });
       }
 
-      // Datei als Buffer vorbereiten
       const buffer = Buffer.from(data, "base64");
 
-      // Upload zu Dropbox
       const dropboxUpload = await fetch("https://content.dropboxapi.com/2/files/upload", {
         method: "POST",
         headers: {
@@ -60,7 +67,6 @@ export default async function handler(req, res) {
 
       const uploadedMeta = await dropboxUpload.json();
 
-      // Freigabelink erzeugen
       const shareRes = await fetch("https://api.dropboxapi.com/2/sharing/create_shared_link_with_settings", {
         method: "POST",
         headers: {
@@ -76,9 +82,7 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: "Failed to create share link", details: shareData });
       }
 
-      // Direktlink statt Vorschau
       const directLink = shareData.url.replace("?dl=0", "?raw=1");
-
       uploadedFiles.push({ name, link: directLink });
     }
 
